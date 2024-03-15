@@ -427,6 +427,174 @@ LPTSTR printAndGetProviders(DWORD type) {
     return listNamesProviders[i - 1];
 }
 
+HCRYPTKEY genKeyExchange(HCRYPTPROV hCryptProv, LPTSTR pszNameProv, DWORD type) {
+    LPSTR pszUserName;
+    DWORD dwUserNameLen;
+    
+
+    //?????
+    if (!CryptGetProvParam(
+        hCryptProv,               // Дескриптор CSP
+        PP_CONTAINER,             // Получение имени ключевого контейнера
+        NULL,                     // Указатель на имя ключевого контейнера
+        &dwUserNameLen,           // Длина имени
+        0))
+    {
+        // Ошибка получении имени ключевого контейнера
+        printf("Error: %d", GetLastError());
+        exit(1);
+    }
+    ////end???????
+
+    // Лучше использовать auto_ptr:
+    //std::auto_ptr<char> aptrUserName(new char[dwUserNameLen+1]);
+    //szUserName = aptrUserName.get();
+    pszUserName = (char*)malloc((dwUserNameLen + 1));
+
+    if (!CryptGetProvParam(
+        hCryptProv,               // Дескриптор CSP
+        PP_CONTAINER,             // Получение имени ключевого контейнера
+        (LPBYTE)pszUserName,      // Указатель на имя ключевого контейнера
+        &dwUserNameLen,           // Длина имени
+        0))
+    {
+        // Ошибка получении имени ключевого контейнера
+        free(pszUserName);
+        printf("error occurred getting the key container name. Error: %d", GetLastError());
+        exit(1);
+    }
+    else
+    {
+        printf("A crypto context has been acquired and \n");
+        printf("The name on the key container is %s\n\n", pszUserName);
+        free(pszUserName);
+    }
+    HCRYPTKEY hKeyExchange = 0;
+    // Контекст с ключевым контейнером доступен,
+    // попытка получения дескриптора ключа подписи
+    if (CryptGetUserKey(
+        hCryptProv,                     // Дескриптор CSP
+        AT_KEYEXCHANGE,                   // Спецификация ключа
+        &hKeyExchange))                         // Дескриптор ключа
+    {
+        printf("A AT_KEYEXCHANGE key is available.\n");
+    }
+    else
+    {
+        printf("No AT_KEYEXCHANGE key is available.\n");
+
+        // Ошибка в том, что контейнер не содержит ключа.
+        if (!(GetLastError() == (DWORD)NTE_NO_KEY)) {
+            printf("An error other than NTE_NO_KEY getting signature key.\n");
+            exit(1);
+        }
+
+
+        // Создание подписанной ключевой пары. 
+        printf("The AT_KEYEXCHANGE key does not exist.\n");
+        printf("Creating a AT_KEYEXCHANGE key pair...\n");
+
+        if (!CryptGenKey(
+            hCryptProv,
+            AT_KEYEXCHANGE,
+            0, //flag
+            &hKeyExchange))
+        {
+            printf("Error occurred creating a exchange key.\n");
+            exit(1);
+        }
+        printf("Created a exchange key pair.\n");
+
+    }
+
+    return hKeyExchange;
+}
+HCRYPTKEY genKeySign(HCRYPTPROV hCryptProv, LPTSTR pszNameProv, DWORD type) {
+    LPSTR pszUserName;
+    DWORD dwUserNameLen;
+
+    //?????
+    if (!CryptGetProvParam(
+        hCryptProv,               // Дескриптор CSP
+        PP_CONTAINER,             // Получение имени ключевого контейнера
+        NULL,                     // Указатель на имя ключевого контейнера
+        &dwUserNameLen,           // Длина имени
+        0))
+    {
+        // Ошибка получении имени ключевого контейнера
+        printf("Error: %d", GetLastError());
+        exit(1);
+    }
+    ////end???????
+
+    // Лучше использовать auto_ptr:
+    //std::auto_ptr<char> aptrUserName(new char[dwUserNameLen+1]);
+    //szUserName = aptrUserName.get();
+    pszUserName = (char*)malloc((dwUserNameLen + 1));
+
+    if (!CryptGetProvParam(
+        hCryptProv,               // Дескриптор CSP
+        PP_CONTAINER,             // Получение имени ключевого контейнера
+        (LPBYTE)pszUserName,      // Указатель на имя ключевого контейнера
+        &dwUserNameLen,           // Длина имени
+        0))
+    {
+        // Ошибка получении имени ключевого контейнера
+        free(pszUserName);
+        printf("error occurred getting the key container name. Error: %d", GetLastError());
+        exit(1);
+    }
+    else
+    {
+        printf("A crypto context has been acquired and \n");
+        printf("The name on the key container is %s\n\n", pszUserName);
+        free(pszUserName);
+    }
+    HCRYPTKEY hKeySign = 0;
+
+    if (CryptGetUserKey(
+        hCryptProv,                     // Дескриптор CSP
+        AT_SIGNATURE,                   // Спецификация ключа
+        &hKeySign))                         // Дескриптор ключа
+    {
+        printf("A signature key is available.\n");
+    }
+    else
+    {
+        printf("No signature key is available.\n");
+
+        // Ошибка в том, что контейнер не содержит ключа.
+
+        if (!(GetLastError() == (DWORD)NTE_NO_KEY)) {
+            printf("An error other than NTE_NO_KEY getting signature key.\n");
+            //exit(1);
+        }
+
+
+        // Создание подписанной ключевой пары. 
+        printf("The signature key does not exist.\n");
+        printf("Creating a signature key pair...\n");
+
+        if (!CryptGenKey(
+            hCryptProv,
+            AT_SIGNATURE,
+            CRYPT_EXPORTABLE, //flag
+            &hKeySign))
+        {
+            printf("Error occurred creating a signature key.\n");
+            exit(1);
+        }
+        printf("Created a signature key pair.\n");
+
+    }
+
+
+
+
+
+    return hKeySign;
+}
+
 HCRYPTPROV getProvider(LPTSTR pszName, DWORD type, LPCWSTR nameContainer) {
 
     HCRYPTPROV hCryptProv;
@@ -488,7 +656,8 @@ HCRYPTPROV getProvider(LPTSTR pszName, DWORD type, LPCWSTR nameContainer) {
         printf("Error reading CSP admin pin. \n");
         exit(1);
     }
-
+    genKeyExchange(hCryptProv, pszName, type);
+    genKeySign(hCryptProv, pszName, type);
     return hCryptProv;
 }
 
